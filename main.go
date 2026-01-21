@@ -62,8 +62,48 @@ type Sprites struct {
 	rawImg    *image.Image
 }
 
-func loadSpirtes() *[]Sprites {
+func (g *Chess) loadSpirtes() *[]Sprites {
+
 	var sprites []Sprites
+
+	boardDarkImage, _, err := image.Decode(bytes.NewReader(boardDarkData))
+	if err != nil {
+		log.Fatalf("unable to load board dark tile image error : %w", err)
+	}
+	boardDarkImg := ebiten.NewImageFromImage(boardDarkImage)
+
+	boardLightImage, _, err := image.Decode(bytes.NewReader(boardLightData))
+	if err != nil {
+		log.Fatalf("unable to load board light tile image error : %w", err)
+	}
+	boardLightImg := ebiten.NewImageFromImage(boardLightImage)
+
+	for row := 1; row <= g.BoardSize; row++ {
+		for col := 1; col <= g.BoardSize; col++ {
+			x := float64(col * g.TileSize)
+			y := float64(row * g.TileSize)
+			log.Printf("x: %f, y: %f", x, y)
+			isDark := (row+col)%2 == 1
+			if isDark {
+				sprites = append(sprites, Sprites{
+					name:      "dark_tile",
+					rank:      9 - row,
+					file:      rune(96 + col),
+					engineImg: boardDarkImg,
+					rawImg:    &boardDarkImage,
+				})
+			} else {
+				sprites = append(sprites, Sprites{
+					name:      "light_tile",
+					rank:      9 - row,
+					file:      rune(96 + col),
+					engineImg: boardLightImg,
+					rawImg:    &boardLightImage,
+				})
+			}
+		}
+	}
+
 	bRookImage, _, err := image.Decode(bytes.NewReader(blackRookData))
 	if err != nil {
 		log.Fatalf("unable to load black rook image error : %w", err)
@@ -268,38 +308,23 @@ func loadSpirtes() *[]Sprites {
 }
 
 type Chess struct {
-	spirtes        *[]Sprites
-	boardDarkTile  *ebiten.Image
-	boardLightTile *ebiten.Image
-	screenWidth    int
-	screenHeight   int
-	boardSize      int
-	tileSize       int
+	GameSpirtes  []Sprites
+	ScreenWidth  int
+	ScreenHeight int
+	BoardSize    int
+	TileSize     int
 }
 
 func NewGame(screenW, screenH, boardSize int) *Chess {
 
-	boardDarkImage, _, err := image.Decode(bytes.NewReader(boardDarkData))
-	if err != nil {
-		log.Fatalf("unable to load board dark tile image error : %w", err)
+	g := &Chess{
+		ScreenWidth:  screenW,
+		ScreenHeight: screenH,
+		BoardSize:    boardSize,
+		TileSize:     screenW / boardSize,
 	}
-	boardDarkImg := ebiten.NewImageFromImage(boardDarkImage)
-
-	boardLightImage, _, err := image.Decode(bytes.NewReader(boardLightData))
-	if err != nil {
-		log.Fatalf("unable to load board light tile image error : %w", err)
-	}
-	boardLightImg := ebiten.NewImageFromImage(boardLightImage)
-
-	return &Chess{
-		screenWidth:    screenW,
-		screenHeight:   screenH,
-		boardSize:      boardSize,
-		tileSize:       screenW / boardSize,
-		boardDarkTile:  boardDarkImg,
-		boardLightTile: boardLightImg,
-		spirtes:        loadSpirtes(),
-	}
+	g.GameSpirtes = *g.loadSpirtes()
+	return g
 }
 
 func (g *Chess) Update() error {
@@ -307,8 +332,8 @@ func (g *Chess) Update() error {
 		mx, my := ebiten.CursorPosition()
 
 		// Convert pixels to board coordinates (1-8)
-		file := (mx / g.tileSize)
-		rank := -(my / g.tileSize) + 8
+		file := (mx / g.TileSize)
+		rank := -(my / g.TileSize) + 8
 		fileRune := rune(97 + file)
 
 		log.Printf("Clicked on File: %c, file:%d, Rank: %d\n", fileRune, file, rank)
@@ -323,30 +348,12 @@ func getPosition(file rune, rank int) (float64, float64) {
 }
 
 func (g *Chess) Draw(screen *ebiten.Image) {
-	scale := float64(g.tileSize) / float64(g.boardDarkTile.Bounds().Dx())
-	for row := 0; row < g.boardSize; row++ {
-		for col := 0; col < g.boardSize; col++ {
-			op := &ebiten.DrawImageOptions{}
-			op.GeoM.Scale(scale, scale)
-			x := float64(col * g.tileSize)
-			y := float64(row * g.tileSize)
-			op.GeoM.Translate(x, y)
-
-			isDark := (row+col)%2 == 1
-
-			if isDark {
-				screen.DrawImage(g.boardDarkTile, op)
-			} else {
-				screen.DrawImage(g.boardLightTile, op)
-			}
-		}
-	}
-
-	for _, s := range *g.spirtes {
+	scale := float64(g.TileSize) / float64(g.GameSpirtes[0].engineImg.Bounds().Dx())
+	for _, s := range g.GameSpirtes {
 		op := &ebiten.DrawImageOptions{}
 		op.GeoM.Scale(scale, scale)
 		posX, posY := getPosition(s.file, s.rank)
-		op.GeoM.Translate(float64(g.tileSize)*posX, float64(g.tileSize)*posY)
+		op.GeoM.Translate(float64(g.TileSize)*posX, float64(g.TileSize)*posY)
 		screen.DrawImage(s.engineImg, op)
 	}
 }
